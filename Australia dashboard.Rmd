@@ -1,0 +1,172 @@
+---
+title: "Prisoners in Australia"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+```
+
+
+
+```{r}
+
+library(ozmaps)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(viridis)
+library(readxl)
+library(highcharter)
+library(tidyr)
+
+data <- read_excel("Prisoners.xlsx",sheet = "State")
+australia_map <- ozmaps::ozmap_states
+map_data <- australia_map %>%
+  left_join(data, by = c("NAME" = "States"))
+AgeSexImp <- read_excel("Prisoners.xlsx", sheet = "AgeSexImp", skip = 1)
+AgeSexImp_long <- AgeSexImp %>%
+  pivot_longer(cols = c("Males", "Females"), names_to = "Gender", values_to = "Count") %>%
+  mutate(Age = factor(Age, levels = unique(Age))) 
+Prisoners_data <- read_excel("Prisoners.xlsx", sheet = "Years", skip = 1)
+Prisoners_long <- tidyr::pivot_longer(Prisoners_data, cols = -State, names_to = "Year", values_to = "Prisoners")
+Prisoners_long$Year <- as.numeric(Prisoners_long$Year)
+OffenceState <- read_excel("Prisoners.xlsx", sheet = "OffenceState")
+offence_data_long <- tidyr::pivot_longer(OffenceState, cols = -Offence, names_to = "State", values_to = "Count")
+charge_data  <- read_excel("Prisoners.xlsx", sheet = "Charge",skip=1)
+charge_data_long <- tidyr::pivot_longer(charge_data, cols = c(Sentenced, Unsentenced), names_to = "Status", values_to = "Count")
+SenLength <- read_excel("Prisoners.xlsx", sheet = "SenLength", skip = 1)
+sentence_levels <- c("Under 3 months", "3 & under 6 months", "6 & under 12 months", "1 & under 2 years", 
+                     "2 & under 5 years", "5 & under 10 years", "10 & under 15 years", "15 & under 20 years", 
+                     "20 years & over", "Life", "Other")
+SenLength$Sentence_Length <- factor(SenLength$Sentence_Length, levels = sentence_levels)
+sen_length_long <- pivot_longer(SenLength, cols = -Sentence_Length, names_to = "State", values_to = "Count")
+
+```
+
+Overview
+==============================
+
+**Name:** Pallavi Kollipara
+
+**StudentID:** s4015344
+
+**overview:**
+
+In our study, we set out to understand the landscape of the prison population in Australia for the year 2023. We started by counting all the prisoners and breaking down these numbers to see how many were male and how many were female. It was fascinating to see the gender distribution and to get a clearer picture of who makes up the prison population today. And we also wanted to see how things had changed over time, so we looked back over the past decade, from 2013 to 2023, and analyzed the variation in prisoner numbers across different states. One of the most striking findings was in New South Wales, where we discovered that there is a significant number of male prisoners in the 30-34 age group. This insight shed light on specific demographic trends that could inform future policies and support programs.
+
+we also dug deeper into the types of offenses that prisoners had committed in each state. We categorized the offenses and compared the number of unsentenced prisoners to those who had been sentenced. For the sentenced prisoners, we detailed the lengths of their sentences, providing a comprehensive view of the sentencing patterns. This helps us understand the broader narrative of crime in Australia today.
+
+**Reference:**
+
+[1] Australian Bureau of statisctics. (2024). Prisoners in Australia. https://www.abs.gov.au/statistics/people/crime-and-justice/prisoners-australia/2023#data-downloads
+
+[2] Plotly. (2024). Plotly R Open Source Graphing Library. https://plotly.com/r/
+
+[3] RStudio. (2023). Layouts in Flexdashboard. RStudio. https://pkgs.rstudio.com/flexdashboard/articles/layouts.html
+
+[4] Data Visualisation.(n.d). Chapter 8 Adding Interactivity. https://dark-star-161610.appspot.com/secured/_book/adding-interactivity.html
+
+[5] Data Visualisation. (n.d). Chapter 10 Dashboards. https://dark-star-161610.appspot.com/secured/_book/dashboards.html
+
+
+Dashboard
+======================================================================
+
+
+Column {data-width=600}
+-----------------------------------------------------------------------
+
+### PRISONERS, state/territory 2023
+
+```{r, fig.width=10}
+p <- ggplot(map_data) +
+  geom_sf(aes(fill = Total_Prisoners, geometry = geometry, text = paste(NAME, ":", Total_Prisoners)), color = "black") +
+  scale_fill_gradient(low = "#d3c1e5", high = "#5e3c99") + 
+  geom_sf_label(aes(label = NAME), fill = "white", color = "black", size = 6, alpha = 0.7) +
+  labs(fill = "Total Prisoners") +
+  theme_classic()+
+  theme_void()+
+  theme(
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.line = element_blank(),
+    legend.position = "right",
+    plot.title = element_text(hjust = 0.5, size = 20)  # Center and increase title size
+  ) 
+
+p_interactive <- ggplotly(p, tooltip = "text") %>%
+  layout(
+    hoverlabel = list(font = list(size = 16)) 
+  )
+
+p_interactive
+```
+
+### PRISONERS, age by sex 2023
+
+```{r}
+bar_plot <- plot_ly(AgeSexImp_long, x = ~Age, y = ~Count, color = ~Gender, colors = c("#ff7f0e", "#1f77b4"), type = 'bar') %>%
+  layout(barmode = 'group',
+         xaxis = list(title = "Age"),
+         yaxis = list(title = "Number of Prisoners"))
+
+bar_plot
+```
+
+
+Column {data-width=600}
+-----------------------------------------------------------------------
+
+### PRISONERS, state/territory, 2013–2023
+
+```{r}
+line_plot <- plot_ly(Prisoners_long, x = ~Year, y = ~Prisoners, color = ~State, type = 'scatter', mode = 'lines+markers')
+
+line_plot <- line_plot %>% 
+  layout( xaxis = list(title = "Year"),
+         yaxis = list(title = "Number of Prisoners"),
+         legend = list(title = "State"))
+line_plot
+
+```
+
+
+
+Offence
+====================================
+
+Row 
+-----------------------------------------------------------------------
+
+### PRISONERS, Indigenous status and most serious offence/charge by state/territory
+```{r}
+plot_ly(offence_data_long, x =~reorder(Offence, -Count), y = ~Count, color = ~State, type = 'bar') %>%
+  layout(xaxis = list(title = "Offence"),
+         yaxis = list(title = "Number of Prisoners"),
+         barmode = 'stack')
+```
+
+Column {data-width=600}
+-----------------------------------------------------------------------
+
+### Distribution of Sentenced and Unsentenced Charges by Offense Type
+```{r}
+plot_ly(charge_data_long, x = ~reorder(Charge, -Count), y = ~Count, color = ~Status, type = 'bar', split = ~Status) %>%
+  layout(xaxis = list(title = "Offense Type"),
+         yaxis = list(title = "Number of Prisoners"),
+         barmode = 'group')
+```
+
+### SENTENCED PRISONERS, Indigenous status and aggregate sentence length by state/territory
+```{r}
+plot_ly(sen_length_long, x = ~Sentence_Length, y = ~Count, color = ~State, type = 'bar') %>%
+  layout(xaxis = list(title = "Sentence Length"),
+         yaxis = list(title = "Number of Prisoners"),
+         barmode = 'stack')
+
+```
